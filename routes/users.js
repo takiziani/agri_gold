@@ -35,7 +35,7 @@ router.post("/mobile/login", async (request, response) => {
         if (!isPasswordValid) {
             return response.status(400).json({ error: "User not found" });
         }
-        const accessToken = jwt.sign({ "id": user.id_user }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "30s" });
+        const accessToken = jwt.sign({ "id": user.id_user }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "1min" });
         if (!user.refresh_token) {
             const refreshToken = jwt.sign({ "id": user.id_user }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
             user.refresh_token = refreshToken;
@@ -97,7 +97,7 @@ router.post("/mobile/refresh", async (request, response) => {
         if (!user || user.refresh_token !== refreshToken) {
             return response.status(401).json({ error: "Invalid refresh token" });
         }
-        const accessToken = jwt.sign({ "id": user.id_user }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "10min" });
+        const accessToken = jwt.sign({ "id": user.id_user }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "1min" });
         response.json({ accessToken });
     } catch (error) {
         return response.status(401).json({ error: error.message });
