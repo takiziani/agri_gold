@@ -21,7 +21,7 @@ const initializeDatabase = async () => {
         await sequelize.authenticate();
         console.log('Connection has been established successfully.');
         // run migration
-        await sequelize.sync({ force: true, alter: false });
+        await sequelize.sync({ force: false, alter: false });
         console.log('Database synchronized');
     } catch (err) {
         console.error('Unable to connect to the database:', err);
