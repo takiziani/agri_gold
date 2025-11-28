@@ -8,6 +8,7 @@ import Message from "./schemas/message.js";
 import UserContextCache from "./schemas/user_context_cache.js";
 import SearchCache from "./schemas/search_cache.js";
 
+import Prediction from "./schemas/prediction.js";
 // Define associations
 
 // User -> Field (one-to-many)
@@ -53,3 +54,8 @@ export {
     UserContextCache,
     SearchCache
 };
+Field.hasMany(Prediction, { foreignKey: 'id_field' });
+Prediction.belongsTo(Field, { foreignKey: 'id_field' });
+User.hasMany(Prediction, { foreignKey: 'id_user' });
+Prediction.belongsTo(User, { foreignKey: 'id_user' });
+export { User, Field, Prediction };

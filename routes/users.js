@@ -35,7 +35,7 @@ router.post("/mobile/login", async (request, response) => {
         if (!isPasswordValid) {
             return response.status(400).json({ error: "User not found" });
         }
-        const accessToken = jwt.sign({ "id": user.id_user }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "30s" });
+        const accessToken = jwt.sign({ "id": user.id_user }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "10min" });
         if (!user.refresh_token) {
             const refreshToken = jwt.sign({ "id": user.id_user }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
             user.refresh_token = refreshToken;
