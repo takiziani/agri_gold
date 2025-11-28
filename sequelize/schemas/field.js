@@ -19,6 +19,10 @@ const Field = sequelize.define("field", {
         type: DataTypes.ARRAY(DataTypes.FLOAT),
         allowNull: false
     },
+    area: {
+        type: DataTypes.FLOAT,
+        allowNull: false
+    },
     id_user: {
         type: DataTypes.INTEGER,
         allowNull: false

@@ -9,11 +9,12 @@ router.use(verifyjwt);
 router.post("/field/add", async (request, response) => {
     try {
         const userId = request.userid;
-        const { name, latetude, longitude } = request.body;
+        const { name, latetude, longitude, area } = request.body;
         const newField = await Field.create({
             name: name,
             latetude: latetude,
             longitude: longitude,
+            area: area,
             id_user: userId
         });
         response.json({ message: "Field added successfully", field: newField });
@@ -149,6 +150,7 @@ router.get("/field/analyse/whether/:id", async (request, response) => {
         response.status(400).json({ error: error.message });
     }
 });
+
 router.get("/field", async (request, response) => {
     try {
         const userId = request.userid;
