@@ -42,7 +42,10 @@ Message.belongsTo(Chat, { foreignKey: 'chat_id' });
 // User -> UserContextCache (one-to-one)
 User.hasOne(UserContextCache, { foreignKey: 'user_id', as: 'contextCache' });
 UserContextCache.belongsTo(User, { foreignKey: 'user_id' });
-
+Field.hasMany(Prediction, { foreignKey: 'id_field' });
+Prediction.belongsTo(Field, { foreignKey: 'id_field' });
+User.hasMany(Prediction, { foreignKey: 'id_user' });
+Prediction.belongsTo(User, { foreignKey: 'id_user' });
 export {
     User,
     Field,
@@ -52,10 +55,6 @@ export {
     Chat,
     Message,
     UserContextCache,
-    SearchCache
+    SearchCache,
+    Prediction
 };
-Field.hasMany(Prediction, { foreignKey: 'id_field' });
-Prediction.belongsTo(Field, { foreignKey: 'id_field' });
-User.hasMany(Prediction, { foreignKey: 'id_user' });
-Prediction.belongsTo(User, { foreignKey: 'id_user' });
-export { User, Field, Prediction };
