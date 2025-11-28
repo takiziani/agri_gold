@@ -356,6 +356,7 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
         }
         const stateData = await stateRes.json();
         const state = stateData.address.state || "Unknown";
+
         // Function to determine season based on current date
         const getCurrentSeason = () => {
             const now = new Date();
@@ -372,6 +373,7 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
             }
         };
         const season = getCurrentSeason();
+
         // Soil Data Fetching
         const soilUrl = `https://rest.isric.org/soilgrids/v2.0/properties/query?lat=${latAvg}&lon=${lonAvg}&property=nitrogen&property=cec&property=sand&depth=0-5cm&value=mean&property=phh2o`;
         const soilRes = await fetch(soilUrl);
@@ -382,6 +384,7 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
         if (!soilData.properties || !soilData.properties.layers) {
             return response.status(500).json({ error: "Invalid data received from soil API" });
         }
+
         const layers = soilData.properties.layers;
         let cec_raw = null;
         let nitrogen_raw = null;
@@ -397,6 +400,7 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
                 ph = layer.depths[0].values.mean / layer.unit_measure.d_factor;
             }
         });
+
         //N
         const total_N = nitrogen_raw; // g/kg
         //K
@@ -406,13 +410,15 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
         if (ph != null) {
             available_P = 4 + (0.3 * cec_raw) - (0.5 * ph);
         }
+
         // Weather Data Fetching
-        const weatherUrl = ` https://api.openweathermap.org/data/2.5/weather?lat=${latAvg}&lon=${lonAvg}&appid=${process.env.OpenWhether}&units=metric`;
+        const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latAvg}&lon=${lonAvg}&appid=${process.env.OpenWhether}&units=metric`;
         const weatherRes = await fetch(weatherUrl);
         if (!weatherRes.ok) {
             return response.status(500).json({ error: "Failed to fetch weather data from external API" });
         }
         const weatherData = await weatherRes.json();
+
         const analysisUrl = `https://agro-tech-clsx.onrender.com/api/full_analysis`;
         const analysisRes = await fetch(analysisUrl, {
             method: "POST",
@@ -429,15 +435,18 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
                 season: season
             })
         });
+
         if (!analysisRes.ok) {
             return response.status(500).json({ error: "Failed to fetch crop analysis from external API" });
         }
+
         const analysisData = await analysisRes.json();
         const mainData = {
             bestCrops: analysisData.alternative_crops,
             soil: analysisData.soil_parameters,
         }
         const text = await main(mainData);
+
         response.json({
             coordinates: {
                 latitude: latAvg,
