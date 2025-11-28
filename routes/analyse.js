@@ -219,7 +219,7 @@ router.get("/field/fullanalyse/:id", async (request, response) => {
     try {
         const userId = request.userid;
         const fieldId = request.params.id;
-        const field = await Field.findOne({ where: { id_field: fieldId, id_user: userId } });
+        const field = await Field.findOne({ where: { id_field: fieldId, /*id_user: userId*/ } });
         if (!field) {
             return response.status(404).json({ error: "Field not found" });
         }
@@ -234,6 +234,8 @@ router.get("/field/fullanalyse/:id", async (request, response) => {
         const lonAvg = lonSum / longitudes.length;
         const stateurl = `https://nominatim.openstreetmap.org/reverse?lat=${latAvg}&lon=${lonAvg}&format=json`;
         const stateRes = await fetch(stateurl);
+        console.log(stateRes);
+
         if (!stateRes.ok) {
             return response.status(500).json({ error: "Failed to fetch location data from external API" });
         }
