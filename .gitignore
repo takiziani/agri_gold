@@ -9,7 +9,6 @@ conversation.txt
 docs/MOBILE_DEV_GUIDE.md
 list_models.js
 migrate.js
-postman/
 seed.js
 test_ai_connection.js
 test_ai_v2.js

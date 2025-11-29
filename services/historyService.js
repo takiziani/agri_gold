@@ -1,4 +1,6 @@
-import { PredictHistoryInput, PredictHistoryOutput } from '../sequelize/relation.js';
+import { Prediction, Field } from '../sequelize/relation.js';
+
+const PLACEHOLDER_EXPLANATION = 'Awaiting AI analysis';
 
 function toFloat(value, fallback = null) {
     if (value === undefined || value === null || value === '') {
@@ -35,14 +37,8 @@ function deriveRegion(yieldPrediction = {}, cropRecommendation = {}) {
     return yieldPrediction.state || cropRecommendation.suitable_for || 'Unknown region';
 }
 
-function computeRevenuePerHectare(predictedYield, pricePerTon) {
-    if (predictedYield == null || pricePerTon == null) return null;
-    return predictedYield * pricePerTon;
-}
-
-function mapInputPayload(userId, payload) {
+function buildSoilSnapshot(payload) {
     return {
-        user_id: userId,
         nitrogen: requireNumber('Nitrogen', payload.Nitrogen),
         phosphorus: requireNumber('Phosphorus', payload.Phosphorus),
         potassium: requireNumber('Potassium', payload.Potassium),
@@ -60,47 +56,143 @@ function mapInputPayload(userId, payload) {
     };
 }
 
-function mapOutputPayload(analysisData = {}) {
+function buildPredictionResults(analysisData = {}) {
     const yieldPrediction = analysisData.yield_prediction || {};
     const cropRecommendation = analysisData.crop_recommendation || {};
     const agricultural = analysisData.agricultural_parameters || {};
-    const alternativeCrops = analysisData.alternative_crops || [];
+    const alternativeCrops = Array.isArray(analysisData.alternative_crops)
+        ? analysisData.alternative_crops
+        : [];
 
-    const chosenCrop = yieldPrediction.crop || cropRecommendation.recommended_crop;
-    const predictedYield = toFloat(yieldPrediction.predicted_yield);
-    const currency = analysisData.currency || 'DZD';
+    const primary = normalizePrimaryCrop({
+        yieldPrediction,
+        cropRecommendation,
+        agricultural,
+        currency: analysisData.currency
+    });
 
-    if (!chosenCrop) {
-        throw new Error('Analysis data must include a recommended crop');
-    }
-    if (predictedYield === null) {
-        throw new Error('Analysis data must include predicted_yield');
-    }
+    const alternatives = alternativeCrops
+        .map(crop => normalizeAlternativeCrop(crop, primary))
+        .filter(Boolean);
 
-    const revenueCandidate = alternativeCrops.find(crop => crop.price_per_ton && crop.predicted_yield);
-    const pricePerTon = revenueCandidate ? toFloat(revenueCandidate.price_per_ton) : null;
-    const revenuePerHectare = computeRevenuePerHectare(
-        revenueCandidate ? toFloat(revenueCandidate.predicted_yield) : predictedYield,
-        pricePerTon
-    );
+    const bestCrops = [primary, ...alternatives].filter(Boolean);
+
+    const soilUpdate = normalizeSoilParameters(analysisData.soil_parameters);
+    const aiExplain = deriveAiExplain(analysisData, bestCrops);
 
     return {
-        best_crop: chosenCrop,
+        bestCrops,
+        aiExplain,
+        soilUpdate
+    };
+}
+
+function normalizePrimaryCrop({ yieldPrediction = {}, cropRecommendation = {}, agricultural = {}, currency }) {
+    const chosenCrop = yieldPrediction.crop || cropRecommendation.recommended_crop;
+    if (!chosenCrop) {
+        return null;
+    }
+
+    const predictedYield = toFloat(yieldPrediction.predicted_yield);
+    if (predictedYield === null) {
+        return null;
+    }
+
+    return {
+        crop: chosenCrop,
         predicted_yield: predictedYield,
         unit: yieldPrediction.unit || 'metric ton per hectare',
         region: deriveRegion(yieldPrediction, cropRecommendation),
-        recommendation_basis: cropRecommendation.recommendation_basis || null,
         ranking: parseRanking(cropRecommendation.ranking),
-        selection_criteria: cropRecommendation.selection_criteria || null,
-        suitable_for: cropRecommendation.suitable_for || null,
-        price_per_ton: pricePerTon,
-        revenue_per_hectare: revenuePerHectare,
+        state: yieldPrediction.state || null,
+        season: yieldPrediction.season || null,
+        price_per_ton: toFloat(cropRecommendation.price_per_ton),
+        revenue: toFloat(agricultural.total_revenue),
         total_area_hectares: toFloat(agricultural.area_hectares),
         total_yield_tons: toFloat(agricultural.total_yield_tons),
-        total_revenue: toFloat(agricultural.total_revenue),
-        currency,
-        alternative_crops: alternativeCrops
+        currency: currency || 'DZD'
     };
+}
+
+function normalizeAlternativeCrop(crop = {}, defaults = {}) {
+    const name = crop.crop || crop.name || crop.recommended_crop;
+    if (!name) return null;
+
+    return {
+        crop: name,
+        predicted_yield: toFloat(crop.predicted_yield ?? crop.yield),
+        unit: crop.unit || defaults.unit || 'metric ton per hectare',
+        ranking: parseRanking(crop.ranking),
+        price_per_ton: toFloat(crop.price_per_ton),
+        revenue: toFloat(crop.revenue ?? crop.total_revenue ?? null),
+        region: crop.region || defaults.region || null,
+        state: crop.state || defaults.state || null,
+        season: crop.season || defaults.season || null
+    };
+}
+
+function deriveAiExplain(analysisData = {}, bestCrops = []) {
+    if (analysisData.aiExplain) {
+        return analysisData.aiExplain;
+    }
+
+    if (analysisData.summary) {
+        return analysisData.summary;
+    }
+
+    const recommendation = analysisData.crop_recommendation?.recommendation_basis;
+    const primaryCrop = bestCrops[0]?.crop;
+
+    if (recommendation && primaryCrop) {
+        return `${primaryCrop}: ${recommendation}`;
+    }
+
+    if (bestCrops.length) {
+        return `AI analysis completed for ${bestCrops[0].crop}.`;
+    }
+
+    return PLACEHOLDER_EXPLANATION;
+}
+
+function normalizeSoilParameters(soilParameters) {
+    if (!soilParameters) {
+        return null;
+    }
+
+    if (Array.isArray(soilParameters)) {
+        return soilParameters.reduce((acc, entry) => {
+            const key = (entry?.name || entry?.parameter || '').toLowerCase();
+            if (key) {
+                acc[key] = extractNumericValue(entry?.value ?? entry?.mean ?? entry?.amount);
+            }
+            return acc;
+        }, {});
+    }
+
+    if (typeof soilParameters === 'object') {
+        const normalized = {};
+        Object.entries(soilParameters).forEach(([key, value]) => {
+            normalized[key] = extractNumericValue(value);
+        });
+        return normalized;
+    }
+
+    return null;
+}
+
+function extractNumericValue(value) {
+    if (value == null) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value === 'object') {
+        return extractNumericValue(value.value ?? value.amount ?? value.mean ?? value.avg);
+    }
+    return null;
 }
 
 export async function createPredictInput(userId, payload) {
@@ -111,19 +203,38 @@ export async function createPredictInput(userId, payload) {
         throw new Error('state and season are required');
     }
 
-    const mapped = mapInputPayload(userId, payload);
-    return PredictHistoryInput.create(mapped);
+    const fieldId = toInt(payload.field_id);
+    if (!fieldId) {
+        throw new Error('field_id is required');
+    }
+
+    const field = await Field.findOne({ where: { id_field: fieldId, id_user: userId } });
+    if (!field) {
+        throw new Error('Field not found for user');
+    }
+
+    const soilSnapshot = buildSoilSnapshot(payload);
+
+    const prediction = await Prediction.create({
+        id_user: userId,
+        id_field: field.id_field,
+        prediction_date: payload.prediction_date ? new Date(payload.prediction_date) : new Date(),
+        soil: soilSnapshot,
+        bestCrops: [],
+        aiExplain: PLACEHOLDER_EXPLANATION
+    });
+
+    return formatPredictionForLegacy(prediction);
 }
 
 export async function deletePredictInput(userId, inputId) {
-    const input = await PredictHistoryInput.findOne({ where: { id: inputId, user_id: userId } });
+    const deleted = await Prediction.destroy({
+        where: { id_prediction: inputId, id_user: userId }
+    });
 
-    if (!input) {
+    if (!deleted) {
         return { success: false, error: 'Prediction input not found' };
     }
-
-    await PredictHistoryOutput.destroy({ where: { input_id: input.id } });
-    await input.destroy();
 
     return { success: true };
 }
@@ -133,29 +244,44 @@ export async function createPredictOutput(userId, inputId, analysisPayload) {
         throw new Error('user_id is required');
     }
 
-    const input = await PredictHistoryInput.findOne({ where: { id: inputId, user_id: userId } });
+    const prediction = await Prediction.findOne({
+        where: { id_prediction: inputId, id_user: userId }
+    });
 
-    if (!input) {
+    if (!prediction) {
         throw new Error('Prediction input not found for user');
     }
 
-    const mapped = mapOutputPayload(analysisPayload);
-    mapped.input_id = input.id;
+    const { bestCrops, aiExplain, soilUpdate } = buildPredictionResults(analysisPayload);
 
-    return PredictHistoryOutput.create(mapped);
+    if (!bestCrops.length) {
+        throw new Error('Analysis data must include at least one crop recommendation');
+    }
+
+    prediction.bestCrops = bestCrops;
+    prediction.aiExplain = aiExplain;
+    if (soilUpdate) {
+        prediction.soil = { ...(prediction.soil || {}), ...soilUpdate };
+    }
+    prediction.prediction_date = new Date();
+
+    await prediction.save();
+    return formatPredictionForLegacy(prediction);
 }
 
 export async function deletePredictOutput(userId, outputId) {
-    const output = await PredictHistoryOutput.findOne({
-        where: { id: outputId },
-        include: [{ model: PredictHistoryInput, attributes: ['user_id'] }]
+    const prediction = await Prediction.findOne({
+        where: { id_prediction: outputId, id_user: userId }
     });
 
-    if (!output || output.PredictHistoryInput?.user_id !== userId) {
+    if (!prediction) {
         return { success: false, error: 'Prediction output not found' };
     }
 
-    await output.destroy();
+    prediction.bestCrops = [];
+    prediction.aiExplain = PLACEHOLDER_EXPLANATION;
+    await prediction.save();
+
     return { success: true };
 }
 
@@ -165,3 +291,14 @@ export default {
     createPredictOutput,
     deletePredictOutput
 };
+
+function formatPredictionForLegacy(prediction) {
+    const plain = prediction?.toJSON ? prediction.toJSON() : prediction;
+    if (!plain) {
+        return prediction;
+    }
+    return {
+        ...plain,
+        id: plain.id_prediction
+    };
+}

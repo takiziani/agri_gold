@@ -1,0 +1,416 @@
+{
+    "info": {
+        "_postman_id": "agribot-chatbot-api-v2",
+        "name": "AgriBot Chatbot API (Simplified)",
+        "description": "Simplified API for AgriBot chatbot with single continuous chat per user.\n\nSetup:\n1. Start server (npm run start:dev)\n2. Ensure the user_id exists\n3. Set `base_url` (e.g., http://localhost:3000)",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Authentication (JWT)",
+            "description": "User registration, login and token lifecycle endpoints.",
+            "item": [
+                {
+                    "name": "Register User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"username\": \"demo-user\",\n  \"email\": \"demo@example.com\",\n  \"password\": \"Passw0rd!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/register",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "register"]
+                        },
+                        "description": "Create a new platform user (no auth required)."
+                    }
+                },
+                {
+                    "name": "Mobile Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const data = pm.response.json();",
+                                    "if (data.accessToken) {",
+                                    "    pm.environment.set('access_token', data.accessToken);",
+                                    "}",
+                                    "if (data.refreshToken) {",
+                                    "    pm.environment.set('refresh_token', data.refreshToken);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"demo@example.com\",\n  \"password\": \"Passw0rd!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/mobile/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["mobile", "login"]
+                        },
+                        "description": "Authenticate and retrieve access/refresh tokens."
+                    }
+                },
+                {
+                    "name": "Get Profile (users/me)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {"key": "Authorization", "value": "Bearer {{access_token}}"}
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/users/me",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "me"]
+                        },
+                        "description": "Fetch the authenticated user's profile."
+                    }
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Authorization", "value": "Bearer {{access_token}}"}
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/users/logout",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "logout"]
+                        },
+                        "description": "Invalidate the refresh token for the logged-in user."
+                    }
+                },
+                {
+                    "name": "Refresh Access Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const data = pm.response.json();",
+                                    "if (data.accessToken) {",
+                                    "    pm.environment.set('access_token', data.accessToken);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/mobile/refresh",
+                            "host": ["{{base_url}}"],
+                            "path": ["mobile", "refresh"]
+                        },
+                        "description": "Exchange a refresh token for a new short-lived access token."
+                    }
+                },
+                {
+                    "name": "Update User",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"},
+                            {"key": "Authorization", "value": "Bearer {{access_token}}"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"updated@example.com\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/update",
+                            "host": ["{{base_url}}"],
+                            "path": ["users", "update"]
+                        },
+                        "description": "Update mutable profile fields for the authenticated user."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Chatbot",
+            "description": "Conversational endpoints for sending, listing, and deleting chat messages.",
+            "item": [
+                {
+                    "name": "Send Message",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": 1,\n  \"message\": \"How do I care for new wheat seedlings?\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/chatbot/messages",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "chatbot", "messages"]
+                        },
+                        "description": "Send a message and receive the AI reply."
+                    }
+                },
+                {
+                    "name": "Get Messages",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/chatbot/messages?user_id=1&limit=20",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "chatbot", "messages"],
+                            "query": [
+                                {"key": "user_id", "value": "1"},
+                                {"key": "limit", "value": "20"}
+                            ]
+                        },
+                        "description": "Fetch messages in chronological order (oldest → newest). Use `before` to paginate backwards."
+                    }
+                },
+                {
+                    "name": "Delete Message",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/chatbot/messages/123",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "chatbot", "messages", "123"]
+                        },
+                        "description": "Delete a single message (replace 123)."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Export",
+            "description": "Download or summarize prediction rows in multiple formats.",
+            "item": [
+                {
+                    "name": "Predictions (JSON)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/export/json",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "export", "json"]
+                        },
+                        "description": "Download prediction rows as JSON ordered by user/date."
+                    }
+                },
+                {
+                    "name": "Predictions (CSV)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/export/csv",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "export", "csv"]
+                        },
+                        "description": "Download prediction rows as CSV for spreadsheet analysis."
+                    }
+                },
+                {
+                    "name": "Intelligence Report (DOCX)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/export/docx",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "export", "docx"]
+                        },
+                        "description": "Full dataset summary rendered as DOCX with AI narrative."
+                    }
+                },
+                {
+                    "name": "Intelligence Report (PDF)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/export/pdf",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "export", "pdf"]
+                        },
+                        "description": "Same intelligence report rendered as PDF."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "History",
+            "description": "Legacy-compatible endpoints for creating and deleting prediction drafts/results.",
+            "item": [
+                {
+                    "name": "Create Prediction Input",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": 1,\n  \"field_id\": 1,\n  \"state\": \"Setif\",\n  \"season\": \"Winter\",\n  \"Nitrogen\": 42,\n  \"Phosphorus\": 28,\n  \"Potassium\": 35,\n  \"Temperature\": 18,\n  \"Humidity\": 65,\n  \"Rainfall\": 450,\n  \"Ph\": 6.8\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/history/predict-inputs",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "history", "predict-inputs"]
+                        },
+                        "description": "Create a draft prediction record tied to a field and raw soil metrics."
+                    }
+                },
+                {
+                    "name": "Delete Prediction Input",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/history/predict-inputs/1",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "history", "predict-inputs", "1"]
+                        },
+                        "description": "Delete a draft prediction by ID (replace 1)."
+                    }
+                },
+                {
+                    "name": "Create Prediction Output",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": 1,\n  \"input_id\": 1,\n  \"analysisData\": {\n    \"yield_prediction\": {\n      \"crop\": \"wheat\",\n      \"predicted_yield\": 5.1,\n      \"unit\": \"tons/hectare\"\n    },\n    \"alternative_crops\": [\n      { \"crop\": \"barley\", \"predicted_yield\": 4.2 },\n      { \"crop\": \"chickpeas\", \"predicted_yield\": 3.8 }\n    ]\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/history/predict-outputs",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "history", "predict-outputs"]
+                        },
+                        "description": "Attach AI analysis to an existing draft prediction."
+                    }
+                },
+                {
+                    "name": "Delete Prediction Output",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": 1\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/history/predict-outputs/1",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "history", "predict-outputs", "1"]
+                        },
+                        "description": "Reset the AI results for a prediction (replace 1)."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Notifications",
+            "description": "Neighbor alert endpoints protected by JWT.",
+            "item": [
+                {
+                    "name": "List Notifications",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {"key": "Authorization", "value": "Bearer {{access_token}}"}
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/notifications",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "notifications"]
+                        },
+                        "description": "Fetch neighbor alerts for the authenticated farmer."
+                    }
+                },
+                {
+                    "name": "Mark Notification Read",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {"key": "Authorization", "value": "Bearer {{access_token}}"}
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/notifications/123/read",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "notifications", "123", "read"]
+                        },
+                        "description": "Set the notification with ID 123 to read."
+                    }
+                },
+                {
+                    "name": "Trigger Neighbor Alerts",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {"key": "Content-Type", "value": "application/json"},
+                            {"key": "Authorization", "value": "Bearer {{access_token}}"}
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"prediction_id\": 77,\n  \"field_id\": 12,\n  \"radius_km\": 5\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/notifications/neighbor-alerts",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "notifications", "neighbor-alerts"]
+                        },
+                        "description": "Manually run the neighbor search for an existing prediction."
+                    }
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {"key": "base_url", "value": "http://localhost:3000"},
+        {"key": "access_token", "value": ""},
+        {"key": "refresh_token", "value": ""}
+    ]
+}

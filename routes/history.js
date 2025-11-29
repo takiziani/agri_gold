@@ -16,6 +16,10 @@ router.post('/predict-inputs', async (req, res) => {
             return res.status(400).json({ success: false, error: 'user_id is required' });
         }
 
+        if (!payload.field_id) {
+            return res.status(400).json({ success: false, error: 'field_id is required' });
+        }
+
         const record = await createPredictInput(user_id, payload);
         return res.status(201).json({ success: true, record });
     } catch (error) {

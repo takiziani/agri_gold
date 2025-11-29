@@ -1,5 +1,4 @@
-import { PredictHistoryInput, PredictHistoryOutput, UserContextCache, Prediction, Field } from '../sequelize/relation.js';
-import sequelize from '../sequelize/config.js';
+import { UserContextCache, Prediction, Field } from '../sequelize/relation.js';
 
 /**
  * Build comprehensive user context for chatbot
@@ -32,10 +31,6 @@ export async function buildUserContext(userId) {
 
         // 2. Fetch fresh data, preferring the predictions table
         let cropHistory = await fetchPredictionHistory(userId);
-
-        if (!cropHistory.length) {
-            cropHistory = await fetchLegacyPredictionHistory(userId);
-        }
 
         if (!cropHistory.length) {
             return {
@@ -267,52 +262,6 @@ async function fetchPredictionHistory(userId) {
     return predictions
         .map(mapPredictionToRecord)
         .filter(Boolean);
-}
-
-async function fetchLegacyPredictionHistory(userId) {
-    const rows = await sequelize.query(`
-        SELECT 
-            phi.nitrogen, phi.phosphorus, phi.potassium, phi.temperature,
-            phi.humidity, phi.ph, phi.rainfall, phi.state, phi.season, phi.created_at,
-            phi.area_hectares, phi.fertilizer, phi.pesticide, phi.annual_rainfall, phi.crop_year,
-            pho.best_crop, pho.predicted_yield, pho.unit, pho.region, 
-            pho.total_revenue, pho.currency
-        FROM predict_history_inputs phi
-        JOIN predict_history_outputs pho ON pho.input_id = phi.id
-        WHERE phi.user_id = :userId 
-        AND phi.created_at > NOW() - INTERVAL '12 months'
-        ORDER BY phi.created_at DESC
-        LIMIT 10
-    `, {
-        replacements: { userId },
-        type: sequelize.QueryTypes.SELECT
-    });
-
-    return rows.map(row => ({
-        crop: row.best_crop,
-        yield: row.predicted_yield,
-        unit: row.unit,
-        revenue: row.total_revenue,
-        currency: row.currency || 'DZD',
-        region: row.region,
-        date: row.created_at,
-        state: row.state,
-        season: row.season,
-        inputs: {
-            nitrogen: row.nitrogen,
-            phosphorus: row.phosphorus,
-            potassium: row.potassium,
-            temperature: row.temperature,
-            humidity: row.humidity,
-            ph: row.ph,
-            rainfall: row.rainfall,
-            annual_rainfall: row.annual_rainfall,
-            fertilizer: row.fertilizer,
-            pesticide: row.pesticide,
-            area_hectares: row.area_hectares,
-            crop_year: row.crop_year
-        }
-    }));
 }
 
 function mapPredictionToRecord(prediction) {
