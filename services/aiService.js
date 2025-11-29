@@ -111,7 +111,7 @@ Output MUST be valid JSON with this shape:
   "recommendations": ["actionable step", "actionable step"]
 }`;
 
-    const userPrompt = `Here is aggregated data from predict_history_inputs.
+    const userPrompt = `Here is aggregated data from recent prediction records.
 Use it to craft a strategic report. Focus on material trends, not raw dumps.
 
 ${JSON.stringify(reportContext, null, 2)}`;

@@ -1,7 +1,7 @@
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableRow, TableCell, WidthType } from 'docx';
 import PDFDocument from 'pdfkit';
 
-export async function buildDocxReport(reportContext, aiSummary) {
+export async function buildDocxReport(reportContext, aiSummary = {}) {
     const sections = buildDocxSections(reportContext, aiSummary);
     const doc = new Document({
         sections: [
@@ -14,7 +14,7 @@ export async function buildDocxReport(reportContext, aiSummary) {
     return Packer.toBuffer(doc);
 }
 
-export function buildPdfReport(reportContext, aiSummary) {
+export function buildPdfReport(reportContext, aiSummary = {}) {
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ margin: 50 });
         const chunks = [];
@@ -34,11 +34,17 @@ export function buildPdfReport(reportContext, aiSummary) {
 
         renderPdfAiSummary(doc, aiSummary);
 
+        doc.moveDown();
+        renderPdfNarratives(doc, reportContext.narratives);
+
+        doc.moveDown();
+        renderPdfSamples(doc, reportContext.samples);
+
         doc.end();
     });
 }
 
-function buildDocxSections(reportContext, aiSummary) {
+function buildDocxSections(reportContext, aiSummary = {}) {
     const sections = [];
 
     sections.push(new Paragraph({
@@ -98,6 +104,15 @@ function buildDocxSections(reportContext, aiSummary) {
         sections.push(sampleTable);
     }
 
+    sections.push(new Paragraph({
+        text: 'Field Narratives',
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 300, after: 150 }
+    }));
+
+    const narrativeParagraphs = buildNarrativeParagraphs(reportContext.narratives || []);
+    sections.push(...narrativeParagraphs);
+
     return sections;
 }
 
@@ -134,7 +149,7 @@ function buildSamplesTable(samples) {
         return null;
     }
 
-    const columns = ['user_id', 'state', 'season', 'nitrogen', 'phosphorus', 'potassium', 'created_at'];
+    const columns = ['field_name', 'best_crop', 'predicted_yield', 'unit', 'nitrogen', 'phosphorus', 'potassium', 'created_at'];
 
     const headerRow = new TableRow({
         children: columns.map(column =>
@@ -174,6 +189,17 @@ function buildBulletParagraphs(title, items = []) {
     });
 
     return paragraphs;
+}
+
+function buildNarrativeParagraphs(narratives = []) {
+    if (!narratives.length) {
+        return [new Paragraph({ text: 'No field narratives available.' })];
+    }
+
+    return narratives.map(narrative => new Paragraph({
+        text: `${narrative.field_name || 'Unnamed field'} (${formatDate(narrative.created_at)}): ${narrative.best_crop || 'Unknown crop'} → ${narrative.aiExplain || 'No AI explanation.'}`,
+        bullet: { level: 0 }
+    }));
 }
 
 function formatNumber(value) {
@@ -230,7 +256,7 @@ function renderPdfStats(doc, stats = {}) {
     });
 }
 
-function renderPdfAiSummary(doc, summary) {
+function renderPdfAiSummary(doc, summary = {}) {
     doc.moveDown();
     doc.fontSize(14).text('AI Highlights', { underline: true });
     doc.fontSize(12);
@@ -253,10 +279,53 @@ function renderPdfBulletSection(doc, title, items = []) {
     });
 }
 
-function formatDate(value) {
-    const date = new Date(value);
-    if (Number.isNaN(date)) {
-        return value;
+function renderPdfNarratives(doc, narratives = []) {
+    doc.fontSize(14).text('Field Narratives', { underline: true });
+    doc.fontSize(12);
+
+    if (!narratives || !narratives.length) {
+        doc.text('No field narratives available.');
+        return;
     }
+
+    narratives.forEach(narrative => {
+        doc.moveDown(0.2);
+        doc.text(`• ${narrative.field_name || 'Unnamed field'} (${formatDate(narrative.created_at)}): ${narrative.best_crop || 'Unknown crop'}`);
+        doc.text(`  ${narrative.aiExplain || 'No AI explanation provided.'}`);
+    });
+}
+
+function renderPdfSamples(doc, samples = []) {
+    doc.fontSize(14).text('Sample Records', { underline: true });
+    doc.fontSize(12);
+
+    if (!samples || !samples.length) {
+        doc.text('No sample records available.');
+        return;
+    }
+
+    samples.forEach(sample => {
+        doc.moveDown(0.2);
+        const header = `${sample.field_name || 'Field'} · ${sample.best_crop || 'Unknown crop'} · ${formatDate(sample.created_at)}`;
+        doc.text(header);
+        const metrics = [`Yield: ${formatNumber(sample.predicted_yield) || 'n/a'} ${sample.unit || ''}`.trim(),
+            `N:${formatNumber(sample.nitrogen)}`,
+            `P:${formatNumber(sample.phosphorus)}`,
+            `K:${formatNumber(sample.potassium)}`
+        ].join(' | ');
+        doc.text(metrics);
+    });
+}
+
+function formatDate(value) {
+    if (!value) {
+        return 'Unknown date';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
     return date.toISOString().split('T')[0];
 }

@@ -1,4 +1,4 @@
-import { PredictHistoryInput, PredictHistoryOutput, UserContextCache } from '../sequelize/relation.js';
+import { PredictHistoryInput, PredictHistoryOutput, UserContextCache, Prediction, Field } from '../sequelize/relation.js';
 import sequelize from '../sequelize/config.js';
 
 /**
@@ -30,88 +30,27 @@ export async function buildUserContext(userId) {
             };
         }
 
-        // 2. Fetch fresh data from prediction history
-        const recentPredictions = await sequelize.query(`
-            SELECT 
-                phi.nitrogen, phi.phosphorus, phi.potassium, phi.temperature,
-                phi.humidity, phi.ph, phi.rainfall, phi.state, phi.season, phi.created_at,
-                phi.area_hectares, phi.fertilizer, phi.pesticide, phi.annual_rainfall, phi.crop_year,
-                pho.best_crop, pho.predicted_yield, pho.unit, pho.region, 
-                pho.total_revenue, pho.currency
-            FROM predict_history_inputs phi
-            JOIN predict_history_outputs pho ON pho.input_id = phi.id
-            WHERE phi.user_id = :userId 
-            AND phi.created_at > NOW() - INTERVAL '12 months'
-            ORDER BY phi.created_at DESC
-            LIMIT 10
-        `, {
-            replacements: { userId },
-            type: sequelize.QueryTypes.SELECT
-        });
+        // 2. Fetch fresh data, preferring the predictions table
+        let cropHistory = await fetchPredictionHistory(userId);
 
-        if (recentPredictions.length === 0) {
+        if (!cropHistory.length) {
+            cropHistory = await fetchLegacyPredictionHistory(userId);
+        }
+
+        if (!cropHistory.length) {
             return {
                 soilProfile: {},
                 cropHistory: [],
                 userRegion: 'Algeria',
                 totalPredictions: 0,
-                cached: false
+                cached: false,
+                preferred_language: 'darja'
             };
         }
 
-        // 3. Aggregate soil profile
-        const soilProfile = {
-            avg_nitrogen: avg(recentPredictions.map(p => p.nitrogen)),
-            avg_phosphorus: avg(recentPredictions.map(p => p.phosphorus)),
-            avg_potassium: avg(recentPredictions.map(p => p.potassium)),
-            avg_ph: avg(recentPredictions.map(p => p.ph)),
-            avg_rainfall: avg(recentPredictions.map(p => p.rainfall)),
-            avg_temperature: avg(recentPredictions.map(p => p.temperature)),
-            avg_humidity: avg(recentPredictions.map(p => p.humidity))
-        };
-
-        // 4. Recent crops performance
-        const cropHistory = recentPredictions.map(p => ({
-            crop: p.best_crop,
-            yield: p.predicted_yield,
-            unit: p.unit,
-            revenue: p.total_revenue,
-            currency: p.currency || 'DZD',
-            region: p.region,
-            date: p.created_at,
-            state: p.state,
-            season: p.season,
-            inputs: {
-                nitrogen: p.nitrogen,
-                phosphorus: p.phosphorus,
-                potassium: p.potassium,
-                temperature: p.temperature,
-                humidity: p.humidity,
-                ph: p.ph,
-                rainfall: p.rainfall,
-                annual_rainfall: p.annual_rainfall,
-                fertilizer: p.fertilizer,
-                pesticide: p.pesticide,
-                area_hectares: p.area_hectares,
-                crop_year: p.crop_year
-            }
-        }));
-
-        // 5. Extract preferences
-        const common_state = mode(recentPredictions.map(p => p.state));
-        const preferred_season = mode(recentPredictions.map(p => p.season));
-
-        const historyDigest = buildHistoryDigest(cropHistory, soilProfile);
-
-        const context = {
-            soilProfile,
-            cropHistory,
-            userRegion: common_state || 'Algeria',
-            preferred_season,
-            totalPredictions: recentPredictions.length,
-            historyDigest,
-            cached: false
-        };
+        const context = composeContextFromRecords(cropHistory);
+        context.cached = false;
+        context.preferred_language = context.preferred_language || 'darja';
 
         // 6. Update cache asynchronously
         updateCacheAsync(userId, context).catch(err =>
@@ -312,8 +251,214 @@ async function updateCacheAsync(userId, context) {
         avg_soil_metrics: context.soilProfile,
         preferred_region: context.userRegion,
         preferred_season: context.preferred_season,
+        preferred_language: context.preferred_language,
         last_updated: new Date()
     });
+}
+
+async function fetchPredictionHistory(userId) {
+    const predictions = await Prediction.findAll({
+        where: { id_user: userId },
+        include: [{ model: Field, attributes: ['id_field', 'name'] }],
+        order: [['prediction_date', 'DESC']],
+        limit: 10
+    });
+
+    return predictions
+        .map(mapPredictionToRecord)
+        .filter(Boolean);
+}
+
+async function fetchLegacyPredictionHistory(userId) {
+    const rows = await sequelize.query(`
+        SELECT 
+            phi.nitrogen, phi.phosphorus, phi.potassium, phi.temperature,
+            phi.humidity, phi.ph, phi.rainfall, phi.state, phi.season, phi.created_at,
+            phi.area_hectares, phi.fertilizer, phi.pesticide, phi.annual_rainfall, phi.crop_year,
+            pho.best_crop, pho.predicted_yield, pho.unit, pho.region, 
+            pho.total_revenue, pho.currency
+        FROM predict_history_inputs phi
+        JOIN predict_history_outputs pho ON pho.input_id = phi.id
+        WHERE phi.user_id = :userId 
+        AND phi.created_at > NOW() - INTERVAL '12 months'
+        ORDER BY phi.created_at DESC
+        LIMIT 10
+    `, {
+        replacements: { userId },
+        type: sequelize.QueryTypes.SELECT
+    });
+
+    return rows.map(row => ({
+        crop: row.best_crop,
+        yield: row.predicted_yield,
+        unit: row.unit,
+        revenue: row.total_revenue,
+        currency: row.currency || 'DZD',
+        region: row.region,
+        date: row.created_at,
+        state: row.state,
+        season: row.season,
+        inputs: {
+            nitrogen: row.nitrogen,
+            phosphorus: row.phosphorus,
+            potassium: row.potassium,
+            temperature: row.temperature,
+            humidity: row.humidity,
+            ph: row.ph,
+            rainfall: row.rainfall,
+            annual_rainfall: row.annual_rainfall,
+            fertilizer: row.fertilizer,
+            pesticide: row.pesticide,
+            area_hectares: row.area_hectares,
+            crop_year: row.crop_year
+        }
+    }));
+}
+
+function mapPredictionToRecord(prediction) {
+    if (!prediction) return null;
+
+    const primaryCrop = extractPrimaryPredictionCrop(prediction.bestCrops);
+    if (!primaryCrop) {
+        return null;
+    }
+
+    const soilMetrics = normalizeSoilMetrics(prediction.soil);
+
+    return {
+        crop: primaryCrop.name,
+        yield: primaryCrop.predictedYield,
+        unit: primaryCrop.unit,
+        revenue: primaryCrop.revenue,
+        currency: primaryCrop.currency || 'DZD',
+        region: primaryCrop.region || prediction.Field?.name || 'Nearby field',
+        state: primaryCrop.state || null,
+        season: primaryCrop.season || null,
+        date: prediction.prediction_date,
+        inputs: soilMetrics
+    };
+}
+
+function extractPrimaryPredictionCrop(bestCrops = []) {
+    if (!Array.isArray(bestCrops) || !bestCrops.length) {
+        return null;
+    }
+
+    const crop = bestCrops[0] || {};
+    const predictedYield = toNumber(crop.predicted_yield ?? crop.yield);
+    return {
+        name: crop.crop || crop.name || 'Unknown crop',
+        predictedYield,
+        unit: crop.unit || 'metric ton per hectare',
+        revenue: toNumber(crop.total_revenue ?? crop.revenue ?? null),
+        currency: crop.currency,
+        region: crop.state || crop.region || null,
+        state: crop.state || null,
+        season: crop.season || null
+    };
+}
+
+export function normalizeSoilMetrics(soil = {}) {
+    const metrics = {
+        nitrogen: null,
+        phosphorus: null,
+        potassium: null,
+        temperature: null,
+        humidity: null,
+        ph: null,
+        rainfall: null
+    };
+
+    const entries = soilToEntries(soil);
+
+    metrics.nitrogen = pickMetric(entries, ['nitrogen', 'n']);
+    metrics.phosphorus = pickMetric(entries, ['phosphorus', 'p']);
+    metrics.potassium = pickMetric(entries, ['potassium', 'k']);
+    metrics.ph = pickMetric(entries, ['ph']);
+    metrics.rainfall = pickMetric(entries, ['rainfall', 'rain']);
+    metrics.temperature = pickMetric(entries, ['temperature', 'temp']);
+    metrics.humidity = pickMetric(entries, ['humidity']);
+
+    return metrics;
+}
+
+function soilToEntries(soil) {
+    if (!soil) return [];
+
+    if (Array.isArray(soil)) {
+        return soil.map(item => ({
+            key: String(item?.name || item?.parameter || '').toLowerCase(),
+            value: extractNumericValue(item?.value ?? item?.mean ?? item?.avg ?? item?.amount)
+        }));
+    }
+
+    if (typeof soil === 'object') {
+        return Object.entries(soil).map(([key, value]) => ({
+            key: key.toLowerCase(),
+            value: extractNumericValue(value)
+        }));
+    }
+
+    return [];
+}
+
+function pickMetric(entries, aliases) {
+    for (const alias of aliases) {
+        const match = entries.find(entry => entry.key === alias || entry.key === alias.toLowerCase());
+        if (match && match.value != null) {
+            return match.value;
+        }
+    }
+    return null;
+}
+
+function extractNumericValue(value) {
+    if (value == null) return null;
+    if (typeof value === 'number' && !isNaN(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? null : parsed;
+    }
+    if (typeof value === 'object') {
+        const candidate = value.value ?? value.amount ?? value.mean ?? value.avg;
+        return extractNumericValue(candidate);
+    }
+    return null;
+}
+
+function composeContextFromRecords(records) {
+    const soilProfile = computeSoilProfileFromRecords(records);
+    const userRegion = mode(records.map(r => r.state || r.region));
+    const preferredSeason = mode(records.map(r => r.season));
+    const historyDigest = buildHistoryDigest(records, soilProfile);
+
+    return {
+        soilProfile,
+        cropHistory: records,
+        userRegion: userRegion || 'Algeria',
+        preferred_season: preferredSeason,
+        totalPredictions: records.length,
+        historyDigest,
+        preferred_language: 'darja'
+    };
+}
+
+function computeSoilProfileFromRecords(records = []) {
+    return {
+        avg_nitrogen: avg(records.map(r => r.inputs?.nitrogen)),
+        avg_phosphorus: avg(records.map(r => r.inputs?.phosphorus)),
+        avg_potassium: avg(records.map(r => r.inputs?.potassium)),
+        avg_ph: avg(records.map(r => r.inputs?.ph)),
+        avg_rainfall: avg(records.map(r => r.inputs?.rainfall)),
+        avg_temperature: avg(records.map(r => r.inputs?.temperature)),
+        avg_humidity: avg(records.map(r => r.inputs?.humidity))
+    };
+}
+
+function toNumber(value) {
+    if (value == null) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
 export default {
