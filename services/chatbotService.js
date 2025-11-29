@@ -189,20 +189,20 @@ export async function getMessages(userId, options = {}) {
             where.id = { [Op.lt]: before };
         }
 
-        // Fetch messages (newest first) + 1 extra to check hasMore
+        // Fetch messages (oldest first) + 1 extra to check hasMore
         const messages = await Message.findAll({
             where,
-            order: [['created_at', 'DESC'], ['id', 'DESC']],
+            order: [['created_at', 'ASC'], ['id', 'ASC']],
             limit: pageSize + 1
         });
 
-        // Check if there are more messages
+        // Check if there are more messages beyond the requested page
         const hasMore = messages.length > pageSize;
         const resultMessages = hasMore ? messages.slice(0, pageSize) : messages;
 
         // Determine cursors
         const nextCursor = hasMore ? resultMessages[resultMessages.length - 1].id : null;
-        const previousCursor = resultMessages.length > 0 ? resultMessages[0].id : null;
+        const previousCursor = before || null;
 
         // Format messages
         const formattedMessages = resultMessages.map(msg => ({

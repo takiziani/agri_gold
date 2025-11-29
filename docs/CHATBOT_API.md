@@ -88,6 +88,8 @@ Parameters (query string or JSON body):
 - `limit` _(optional)_ – 1..100, default `50`
 - `before` _(optional)_ – message ID cursor; returns messages with IDs `< before`
 
+> Messages are returned in chronological order (oldest → newest). Use the `before` cursor to walk further back in time; the response’s `nextCursor` is the ID you should pass as the next `before` to keep paginating.
+
 Response:
 
 ```json
@@ -96,16 +98,16 @@ Response:
   "chatId": 15,
   "messages": [
     {
-      "id": 902,
-      "text": "راقب الأوراق ...",
-      "isUser": false,
-      "timestamp": "2024-11-30T10:15:24.078Z"
-    },
-    {
       "id": 901,
       "text": "كيفاش نتعامل مع مرض البطاطا؟",
       "isUser": true,
       "timestamp": "2024-11-30T10:15:22.821Z"
+    },
+    {
+      "id": 902,
+      "text": "راقب الأوراق ...",
+      "isUser": false,
+      "timestamp": "2024-11-30T10:15:24.078Z"
     }
   ],
   "pagination": {
@@ -118,8 +120,6 @@ Response:
   }
 }
 ```
-
-Messages are returned in inverse chronological order (newest first). Use `nextCursor` as the `before` value to fetch the next page.
 
 ### 3. Delete Message (Delete Route)
 
