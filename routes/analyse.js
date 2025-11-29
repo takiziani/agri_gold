@@ -323,7 +323,16 @@ router.get("/field/analyse/weather/:id", async (request, response) => {
             return response.status(500).json({ error: "Failed to fetch weather data from external API" });
         }
         const weatherData = await weatherRes.json();
-        response.json({ weather: weatherData });
+        const main = weatherData.main;
+        const wind = weatherData.wind;
+        response.json({
+            weather: {
+                temperature: main.temp,
+                humidity: main.humidity,
+                wind_speed: wind.speed,
+                weather_description: weatherData.weather[0].description
+            }
+        });
     } catch (error) {
         response.status(400).json({ error: error.message });
     }
