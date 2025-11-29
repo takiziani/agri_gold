@@ -281,6 +281,7 @@ router.get("/field/fullanalyse/:id", async (request, response) => {
         if (!analysisRes.ok) {
             return response.status(500).json({ error: "Failed to fetch crop analysis from external API" });
         }
+        const analysisData = await analysisRes.json();
         const mainData = {
             bestCrops: analysisData.alternative_crops,
             soil: analysisData.soil_parameters,
