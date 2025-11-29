@@ -198,9 +198,7 @@ router.get("/field/fullanalyse/:id", async (request, response) => {
                 "Accept-Language": "en"
             }
         });
-
         console.log(stateRes);
-
         if (!stateRes.ok) {
             return response.status(500).json({
                 error: "Failed to fetch location data from external API"
@@ -432,80 +430,32 @@ router.get("/field/fullanalyse/cardinality", async (request, response) => {
         response.status(400).json({ error: error.message });
     }
 });
-// router.get("/field/Ganalyse/:id", async (request, response) => {
-//     try {
-//         const userId = request.userid;
-//         const fieldId = request.params.id;
-//         const { state, season } = request.query;
-//         const field = await Field.findOne({ where: { id_field: fieldId, id_user: userId } });
-//         if (!field) {
-//             return response.status(404).json({ error: "Field not found" });
-//         }
-//         const latitudes = field.latetude;
-//         const longitudes = field.longitude;
-//         if (!latitudes || latitudes.length === 0 || !longitudes || longitudes.length === 0) {
-//             return response.status(400).json({ error: "Field coordinates are missing or invalid" });
-//         }
-//         const latSum = latitudes.reduce((a, b) => a + b, 0);
-//         const lonSum = longitudes.reduce((a, b) => a + b, 0);
-//         const latAvg = latSum / latitudes.length;
-//         const lonAvg = lonSum / longitudes.length;
-//         // Soil Data Fetching
-//         const soilUrl = `https://rest.isric.org/soilgrids/v2.0/properties/query?lat=${latAvg}&lon=${lonAvg}&property=nitrogen&property=cec&property=sand&depth=0-5cm&value=mean&property=phh2o`;
-//         const soilRes = await fetch(soilUrl);
-//         if (!soilRes.ok) {
-//             return response.status(500).json({ error: "Failed to fetch soil data from external API" });
-//         }
-//         const soilData = await soilRes.json();
-//         if (!soilData.properties || !soilData.properties.layers) {
-//             return response.status(500).json({ error: "Invalid data received from soil API" });
-//         }
-//         const layers = soilData.properties.layers;
-//         let cec_raw = null;
-//         let nitrogen_raw = null;
-//         let ph = null;
-//         layers.forEach(layer => {
-//             if (layer.name === "cec") {
-//                 cec_raw = layer.depths[0].values.mean / layer.unit_measure.d_factor;
-//             }
-//             if (layer.name === "nitrogen") {
-//                 nitrogen_raw = layer.depths[0].values.mean / layer.unit_measure.d_factor;
-//             }
-//             if (layer.name === "phh2o") {
-//                 ph = layer.depths[0].values.mean / layer.unit_measure.d_factor;
-//             }
-//         });
-//         //N
-//         const total_N = nitrogen_raw; // g/kg
-//         //K
-//         const available_K = 2.5 * cec_raw;
-//         //P requires pH
-//         let available_P = null;
-//         if (ph != null) {
-//             available_P = 4 + (0.3 * cec_raw) - (0.5 * ph);
-//         }
-//         // Weather Data Fetching
-//         const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latAvg}&lon=${lonAvg}&appid=${process.env.OpenWhether}&units=metric`;
-//         const weatherRes = await fetch(weatherUrl);
-//         if (!weatherRes.ok) {
-//             return response.status(500).json({ error: "Failed to fetch weather data from external API" });
-//         }
-//         const weatherData = await weatherRes.json();
-//         const body = JSON.stringify({
-//             Temperature: weatherData.main.temp.toString(),
-//             Humidity: weatherData.main.humidity.toString(),
-//             Nitrogen: total_N ? total_N.toFixed(2) : "0",
-//             Potassium: available_K ? available_K.toFixed(2) : "0",
-//             Phosphorus: available_P ? available_P.toFixed(2) : "0",
-//             Ph: ph ? ph.toFixed(1) : "7",
-//             Rainfall: "10",
-//             state: state,
-//             season: season
-//         })
-//         const text = await main(body);
-//         response.json({ text });
-//     } catch (error) {
-//         response.status(400).json({ error: error.message });
-//     }
-// });
+router.get("/field/analyse/weather/:id", async (request, response) => {
+    try {
+        const userId = request.userid;
+        const fieldId = request.params.id;
+        const field = await Field.findOne({ where: { id_field: fieldId, /*id_user: userId*/ } });
+        if (!field) {
+            return response.status(404).json({ error: "Field not found" });
+        }
+        const latitudes = field.latetude;
+        const longitudes = field.longitude;
+        if (!latitudes || latitudes.length === 0 || !longitudes || longitudes.length === 0) {
+            return response.status(400).json({ error: "Field coordinates are missing or invalid" });
+        }
+        const latSum = latitudes.reduce((a, b) => a + b, 0);
+        const lonSum = longitudes.reduce((a, b) => a + b, 0);
+        const latAvg = latSum / latitudes.length;
+        const lonAvg = lonSum / longitudes.length;
+        const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latAvg}&lon=${lonAvg}&appid=${process.env.OpenWhether}&units=metric`;
+        const weatherRes = await fetch(weatherUrl);
+        if (!weatherRes.ok) {
+            return response.status(500).json({ error: "Failed to fetch weather data from external API" });
+        }
+        const weatherData = await weatherRes.json();
+        response.json({ weather: weatherData });
+    } catch (error) {
+        response.status(400).json({ error: error.message });
+    }
+});
 export default router;
