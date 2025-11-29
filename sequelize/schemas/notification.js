@@ -16,15 +16,15 @@ const Notification = sequelize.define('Notification', {
             key: 'id_user'
         }
     },
-    output_id: {
+    prediction_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: 'predict_history_outputs',
-            key: 'id'
+            model: 'predictions',
+            key: 'id_prediction'
         }
     },
-    // Imported from predict_history_output
+    // Snapshot of the originating prediction
     best_crop: {
         type: DataTypes.STRING,
         allowNull: false

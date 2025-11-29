@@ -4,6 +4,7 @@ import { Field, Prediction } from "../sequelize/relation.js";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import main from "../utils/gemini.js";
+import { createNeighborNotifications } from "../services/notificationService.js";
 dotenv.config();
 const router = Router();
 // Removed global middleware - apply per route instead
@@ -295,6 +296,14 @@ router.get("/field/fullanalyse/:id", async (request, response) => {
             aiExplain: text,
             id_user: userId
         });
+        try {
+            await createNeighborNotifications({
+                predictionId: prediction.id_prediction,
+                fieldId: field.id_field
+            });
+        } catch (notifyError) {
+            console.warn('Neighbor notification dispatch skipped:', notifyError.message);
+        }
         response.json({ prediction });
     } catch (error) {
         response.status(400).json({ error: error.message });

@@ -27,9 +27,9 @@ PredictHistoryOutput.belongsTo(PredictHistoryInput, { foreignKey: 'input_id' });
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 Notification.belongsTo(User, { foreignKey: 'user_id' });
 
-// PredictHistoryOutput -> Notification (one-to-many)
-PredictHistoryOutput.hasMany(Notification, { foreignKey: 'output_id', as: 'notifications' });
-Notification.belongsTo(PredictHistoryOutput, { foreignKey: 'output_id' });
+// Prediction -> Notification (one-to-many)
+Prediction.hasMany(Notification, { foreignKey: 'prediction_id', as: 'notifications' });
+Notification.belongsTo(Prediction, { foreignKey: 'prediction_id' });
 
 // User -> Chat (one-to-one)
 User.hasOne(Chat, { foreignKey: 'user_id', as: 'chat' });

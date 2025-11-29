@@ -99,6 +99,43 @@ export async function generateResponse(userMessage, context = {}) {
     }
 }
 
+export async function generateDatasetReportSummary(reportContext) {
+    const systemPrompt = `You are AgriBot's insights analyst. Produce concise, structured findings for agronomy stakeholders.
+
+Output MUST be valid JSON with this shape:
+{
+  "overview": "string",
+  "soilFindings": ["bullet", "bullet"],
+  "climateSignals": ["bullet"],
+  "riskAlerts": ["bullet"],
+  "recommendations": ["actionable step", "actionable step"]
+}`;
+
+    const userPrompt = `Here is aggregated data from predict_history_inputs.
+Use it to craft a strategic report. Focus on material trends, not raw dumps.
+
+${JSON.stringify(reportContext, null, 2)}`;
+
+    try {
+        const response = await hf.chatCompletion({
+            model: HF_MODEL_ID,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 800,
+            temperature: 0.4
+        });
+
+        const content = response.choices?.[0]?.message?.content || '';
+        const parsed = safeJsonFromString(content);
+        return normalizeReportSummary(parsed);
+    } catch (error) {
+        console.error('Report summary generation failed:', error);
+        return normalizeReportSummary();
+    }
+}
+
 /**
  * Build the complete prompt with context
  * @param {string} userMessage - User's message
@@ -280,5 +317,36 @@ export async function summarizeIfNeeded(messages, maxTokens = 6000) {
 export default {
     generateResponse,
     summarizeIfNeeded,
-    SYSTEM_PROMPT
+    SYSTEM_PROMPT,
+    generateDatasetReportSummary
 };
+
+function safeJsonFromString(text) {
+    if (!text) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+            try {
+                return JSON.parse(match[0]);
+            } catch (inner) {
+                return null;
+            }
+        }
+        return null;
+    }
+}
+
+function normalizeReportSummary(data = {}) {
+    return {
+        overview: data.overview || 'No AI overview available.',
+        soilFindings: Array.isArray(data.soilFindings) && data.soilFindings.length ? data.soilFindings : ['Insufficient soil findings provided.'],
+        climateSignals: Array.isArray(data.climateSignals) && data.climateSignals.length ? data.climateSignals : ['No climate signals detected.'],
+        riskAlerts: Array.isArray(data.riskAlerts) && data.riskAlerts.length ? data.riskAlerts : ['No critical risks highlighted.'],
+        recommendations: Array.isArray(data.recommendations) && data.recommendations.length ? data.recommendations : ['Collect more data to unlock tailored recommendations.']
+    };
+}

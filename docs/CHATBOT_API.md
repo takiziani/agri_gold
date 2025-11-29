@@ -308,3 +308,111 @@ Body: `{ "user_id": 42 }`. Removes only the specified output row.
 ## Support
 
 Contact the AgriBot platform team for onboarding keys or troubleshooting.
+
+---
+
+## Export Endpoints
+
+Located under `/api/export` for quick data dumps of `predict_history_input`.
+
+### GET `/api/export/json`
+
+Returns every `predict_history_input` row ordered by `user_id` and `created_at` ascending.
+
+```
+curl http://localhost:3000/api/export/json
+```
+
+```json
+{
+  "success": true,
+  "count": 128,
+  "rows": [
+    {
+      "id": 1,
+      "user_id": 3,
+      "temperature": 19.1,
+      "humidity": 55,
+      "nitrogen": 1.2,
+      "phosphorus": 7.3,
+      "potassium": 60,
+      "ph": 7,
+      "rainfall": 10,
+      "state": "Algiers",
+      "season": "Winter",
+      "created_at": "2025-11-21T09:01:43.000Z"
+    }
+  ]
+}
+```
+
+### GET `/api/export/csv`
+
+Streams the same dataset as CSV with a header row.
+
+```
+curl -o predict_history_inputs.csv \
+  http://localhost:3000/api/export/csv
+```
+
+### GET `/api/export/docx`
+
+Generates a DOCX intelligence report for the full dataset. The backend aggregates the metrics,
+asks the HuggingFace model for structured insights, and streams the resulting `.docx` file.
+
+```
+curl -o predict_history_report.docx \
+  http://localhost:3000/api/export/docx
+```
+
+### GET `/api/export/pdf`
+
+Same intelligence report rendered as PDF.
+
+```
+curl -o predict_history_report.pdf \
+  http://localhost:3000/api/export/pdf
+```
+
+---
+
+## Notification Endpoints
+
+Neighbor alerts fire automatically after a prediction is generated. These routes let you
+inspect or manually retrigger notifications.
+
+### GET `/api/notifications`
+
+Requires bearer token. Returns the latest notifications for the authenticated user.
+
+```
+Authorization: Bearer <access token>
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/api/notifications
+```
+
+### PATCH `/api/notifications/:id/read`
+
+Marks a specific notification as read.
+
+```
+curl -X PATCH -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/api/notifications/123/read
+```
+
+### POST `/api/notifications/neighbor-alerts`
+
+Triggers the neighbor search manually (helpful for replays or admin tooling).
+
+Body:
+
+```json
+{
+  "prediction_id": 77,
+  "field_id": 12,
+  "radius_km": 5
+}
+```
+
+The endpoint responds with `{ "created": <count>, "neighbors": [userIds...] }` when
+new notifications are inserted.
