@@ -20,7 +20,7 @@ router.get('/csv', async (req, res) => {
         const rows = await fetchPredictHistoryInputs();
         const csv = buildCsvFromInputs(rows);
         res.set('Content-Type', 'text/csv');
-        res.set('Content-Disposition', 'attachment; filename="predict_history_inputs.csv"');
+        res.set('Content-Disposition', 'attachment; filename="predictions.csv"');
         return res.send(csv);
     } catch (error) {
         console.error('Export CSV error:', error);
@@ -40,7 +40,7 @@ router.get('/docx', async (req, res) => {
         const buffer = await buildDocxReport(reportContext, aiSummary);
 
         res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.set('Content-Disposition', 'attachment; filename="predict_history_report.docx"');
+        res.set('Content-Disposition', 'attachment; filename="predictions_report.docx"');
         return res.send(buffer);
     } catch (error) {
         console.error('Export DOCX error:', error);
@@ -60,7 +60,7 @@ router.get('/pdf', async (req, res) => {
         const buffer = await buildPdfReport(reportContext, aiSummary);
 
         res.set('Content-Type', 'application/pdf');
-        res.set('Content-Disposition', 'attachment; filename="predict_history_report.pdf"');
+        res.set('Content-Disposition', 'attachment; filename="predictions_report.pdf"');
         return res.send(buffer);
     } catch (error) {
         console.error('Export PDF error:', error);
